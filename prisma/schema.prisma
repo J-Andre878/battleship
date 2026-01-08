@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id            Int       @id @default(autoincrement())
+  googleId      String?   @unique @map("google_id")
+  email         String?   @unique
+  username      String    @unique
+  passwordHash  String?   @map("password_hash")
+  avatarUrl     String?   @map("avatar_url")
+  level         Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  gamesAsPlayer1  Game[] @relation("Player1Games")
+  gamesAsPlayer2  Game[] @relation("Player2Games")
+  gamesAsWinner   Game[] @relation("WinnerGames")
+  ships           Ship[]
+  shots           Shot[]
+  
+  @@map("players")
+}
+
+model Game {
+  id          Int       @id @default(autoincrement())
+  player1Id   Int?      @map("player1_id")
+  player2Id   Int?      @map("player2_id")
+  winnerId    Int?      @map("winner_id")
+  status      String    @default("waiting")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  finishedAt  DateTime? @map("finished_at")
+  
+  player1     Player?   @relation("Player1Games", fields: [player1Id], references: [id], onDelete: Cascade)
+  player2     Player?   @relation("Player2Games", fields: [player2Id], references: [id], onDelete: Cascade)
+  winner      Player?   @relation("WinnerGames", fields: [winnerId], references: [id])
+  ships       Ship[]
+  shots       Shot[]
+  
+  @@map("games")
+}
+
+model Ship {
+  id        Int     @id @default(autoincrement())
+  gameId    Int     @map("game_id")
+  playerId  Int     @map("player_id")
+  shipType  String  @map("ship_type")
+  positions Json
+  isSunk    Boolean @default(false) @map("is_sunk")
+  
+  game      Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  player    Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  
+  @@map("ships")
+}
+
+model Shot {
+  id        Int      @id @default(autoincrement())
+  gameId    Int      @map("game_id")
+  playerId  Int      @map("player_id")
+  x         Int
+  y         Int
+  hit       Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  
+  @@unique([gameId, playerId, x, y])
+  @@map("shots")
+}
