@@ -1,4 +1,43 @@
-export default function LobbyPage() {
+
+import { auth } from '@/auth'
+import { redirect } from 'next/navigation'
+import { prisma } from '@/lib/prisma'
+export default async function LobbyPage() {
+  const session = await auth()
+  if (!session?.user) {
+    redirect('/login')
+  }
+  const player = await prisma.player.findFirst({
+    where: { email: session.user.email }
+  })
+  if (!player) {
+    redirect('/login')
+  }
+  const totalGames = await prisma.game.count({
+    where: {
+      OR: [
+        { player1Id: player.id },
+        { player2Id: player.id }
+      ]
+    }
+  })
+  const wins = await prisma.game.count({
+    where: {
+      winnerId: player.id
+    }
+  })
+  const losses = totalGames - wins
+  const availableGames = await prisma.game.findMany({
+    where: {
+      status: 'waiting'
+    },
+    include: {
+      player1: true
+    },
+    orderBy: {
+      createdAt: 'desc'
+    }
+  })
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -7,8 +46,8 @@ export default function LobbyPage() {
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-900">Battleship Lobby</h1>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-900 font-medium">Usuario: Player1</span>
-              <span className="text-sm text-gray-900 font-medium">Nivel: 1</span>
+              <span className="text-sm text-gray-900 font-medium">Usuario: {player.username}</span>
+              <span className="text-sm text-gray-900 font-medium">Nivel: {player.level}</span>
               <button className="text-sm text-red-600 hover:text-red-800">
                 Cerrar Sesión
               </button>
@@ -34,15 +73,15 @@ export default function LobbyPage() {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-800">Partidas jugadas:</span>
-                  <span className="font-semibold text-black">0</span>
+                  <span className="font-semibold text-black">{totalGames}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-800">Victorias:</span>
-                  <span className="font-semibold text-green-700">0</span>
+                  <span className="font-semibold text-green-700">{wins}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-800">Derrotas:</span>
-                  <span className="font-semibold text-red-700">0</span>
+                  <span className="font-semibold text-red-700">{losses}</span>
                 </div>
               </div>
             </div>
