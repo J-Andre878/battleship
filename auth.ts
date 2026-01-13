@@ -95,5 +95,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt"
+  },
+  cookies: {
+    sessionToken: {
+      name: `authjs.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: false  // false porque usas HTTP (no HTTPS)
+      }
+    },
+    callbackUrl: {
+      name: `authjs.callback-url`,
+      options: {
+        sameSite: 'lax',
+        path: '/',
+        secure: false
+      }
+    },
+    csrfToken: {
+      name: `authjs.csrf-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: false
+      }
+    }
   }
 })

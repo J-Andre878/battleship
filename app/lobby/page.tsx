@@ -1,14 +1,47 @@
 
-import { auth } from '@/auth'
+import { auth , signOut } from '@/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
+
+async function createGame(playerId: number) {
+  'use server'
+  
+  const newGame = await prisma.game.create({
+    data: {
+      player1Id: playerId,
+      status: 'waiting'
+    }
+  })
+  
+  redirect(`/game/${newGame.id}`)
+}
+
+async function joinGame(gameId: number, playerId: number) {
+  'use server'
+  
+  await prisma.game.update({
+    where: { id: gameId },
+    data: {
+      player2Id: playerId,
+      status: 'in_progress'
+    }
+  })
+  
+  redirect(`/game/${gameId}`)
+}
+
+async function handleSignOut() {
+  'use server'
+  await signOut()
+}
+
 export default async function LobbyPage() {
   const session = await auth()
   if (!session?.user) {
     redirect('/login')
   }
-  const player = await prisma.player.findFirst({
-    where: { email: session.user.email }
+  const player = await prisma.player.findUnique({
+    where: { id: parseInt(session.user.id) }
   })
   if (!player) {
     redirect('/login')
@@ -18,7 +51,8 @@ export default async function LobbyPage() {
       OR: [
         { player1Id: player.id },
         { player2Id: player.id }
-      ]
+      ],
+      status: { not: 'waiting' }
     }
   })
   const wins = await prisma.game.count({
@@ -27,9 +61,11 @@ export default async function LobbyPage() {
     }
   })
   const losses = totalGames - wins
+
   const availableGames = await prisma.game.findMany({
     where: {
-      status: 'waiting'
+      status: 'waiting',
+      player1Id: { not: player.id }
     },
     include: {
       player1: true
@@ -48,9 +84,11 @@ export default async function LobbyPage() {
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-900 font-medium">Usuario: {player.username}</span>
               <span className="text-sm text-gray-900 font-medium">Nivel: {player.level}</span>
-              <button className="text-sm text-red-600 hover:text-red-800">
-                Cerrar Sesión
-              </button>
+              <form action={handleSignOut}>
+                <button type ="submit" className="text-sm text-red-600 hover:text-red-800">
+                  Cerrar Sesión
+                </button>
+              </form>
             </div>
           </div>
         </div>
@@ -62,9 +100,11 @@ export default async function LobbyPage() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow p-6">
               <h2 className="text-xl font-bold mb-4 text-black">Nueva Partida</h2>
-              <button className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 font-medium">
-                Crear Partida
-              </button>
+              <form action={createGame.bind(null, player.id)}>
+                <button type="submit" className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 font-medium">
+                  Crear Partida
+                </button>
+              </form>
             </div>
 
             {/* Estadísticas del jugador */}
@@ -95,39 +135,29 @@ export default async function LobbyPage() {
               </div>
               
               <div className="divide-y divide-gray-200">
-                {/* Ejemplo de partida esperando */}
-                <div className="px-6 py-4 hover:bg-gray-50">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium text-black">Partida #1</p>
-                      <p className="text-sm text-gray-700">Esperando jugador...</p>
-                      <p className="text-xs text-gray-700">Creada por: Player2</p>
-                    </div>
-                    <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                      Unirse
-                    </button>
+                {availableGames.length === 0 ? (
+                  <div className="px-6 py-8 text-center text-gray-700">
+                    <p className="font-medium">No hay partidas disponibles</p>
+                    <p className="text-sm mt-2">¡Crea una nueva partida para empezar!</p>
                   </div>
-                </div>
-
-                {/* Ejemplo de partida en curso */}
-                <div className="px-6 py-4 bg-gray-50">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium text-black">Partida #2</p>
-                      <p className="text-sm text-green-700 font-medium">En curso</p>
-                      <p className="text-xs text-gray-700">Player3 vs Player4</p>
+                ) : (
+                  availableGames.map((game) => (
+                    <div key={game.id} className="px-6 py-4 hover:bg-gray-50">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-black">Partida #{game.id}</p>
+                          <p className="text-sm text-gray-700">Esperando jugador...</p>
+                          <p className="text-xs text-gray-700">Creada por: {game.player1?.username}</p>
+                        </div>
+                        <form action={joinGame.bind(null, game.id, player.id)}>
+                          <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                            Unirse
+                          </button>
+                        </form>
+                      </div>
                     </div>
-                    <button className="bg-gray-400 text-white px-4 py-2 rounded-lg cursor-not-allowed" disabled>
-                      En Juego
-                    </button>
-                  </div>
-                </div>
-
-                {/* Mensaje cuando no hay partidas */}
-                <div className="px-6 py-8 text-center text-gray-700">
-                  <p className="font-medium">No hay partidas disponibles</p>
-                  <p className="text-sm mt-2">¡Crea una nueva partida para empezar!</p>
-                </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
